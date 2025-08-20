@@ -14,6 +14,9 @@ class _SearchWoundScreenState extends State<SearchWoundScreen> {
     SearchWoundsService(),
   );
 
+  List<String> _filtrosSelecionados = [];
+  Map<String, String> _valoresFiltros = {};
+
   String? _campoSelecionado;
   String? _valorCampo;
   List<Wound> _resultados = [];
@@ -44,13 +47,50 @@ class _SearchWoundScreenState extends State<SearchWoundScreen> {
   ];
 
   Future<void> searchWound() async {
-    if (_campoSelecionado == null ||
-        _valorCampo == null ||
-        _valorCampo!.isEmpty) {
+    if (_filtrosSelecionados.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Selecione um critério e informe um valor válido!'),
-        ),
+        SnackBar(content: Text('Selecione pelo menos um filtro!')),
+      );
+      return;
+    }
+
+    Map<String, dynamic> filtros = {};
+
+    for (var campo in _filtrosSelecionados) {
+      final valor = _valoresFiltros[campo];
+      if (valor == null || valor.isEmpty) continue;
+
+      switch (campo) {
+        case 'idade':
+          filtros['idade'] =
+              valor == '< 20'
+                  ? '<20'
+                  : valor == '20-59'
+                  ? '20-59'
+                  : '60+';
+          break;
+
+        case 'extensao_lesao':
+          filtros['extensao_lesao'] = valor;
+          break;
+
+        case 'localizacao_anatomica_id':
+          filtros['localizacao_anatomica_id'] =
+              WoundConstants.localizacoesMap[valor];
+          break;
+
+        case 'tipo_tecido':
+          filtros['tipo_tecido'] = valor.toLowerCase();
+          break;
+
+        default:
+          filtros[campo] = valor;
+      }
+    }
+
+    if (filtros.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Preencha pelo menos um valor de filtro!')),
       );
       return;
     }
@@ -60,47 +100,13 @@ class _SearchWoundScreenState extends State<SearchWoundScreen> {
     });
 
     try {
-      Map<String, dynamic> filtros = {};
-
-      switch (_campoSelecionado) {
-        case 'idade':
-          if (_valorCampo == '< 20') {
-            filtros['idade'] = '<20';
-          } else if (_valorCampo == '20-59') {
-            filtros['idade'] = '20-59';
-          } else if (_valorCampo == '60+') {
-            filtros['idade'] = '60+';
-          }
-          break;
-
-        case 'extensao_lesao':
-          filtros['extensao_lesao'] =
-              _valorCampo; // já vem como: pequena, media, etc.
-          break;
-
-        case 'localizacao_anatomica_id':
-          filtros['localizacao_anatomica_id'] =
-              WoundConstants.localizacoesMap[_valorCampo];
-          break;
-
-        case 'tipo_tecido':
-          filtros['tipo_tecido'] = _valorCampo!.toLowerCase(); // ex: granulação
-          break;
-
-        default:
-          filtros[_campoSelecionado!] = _valorCampo!;
-      }
-
       final resultados = await _searchWoundsController.search(filtros);
-
       setState(() {
-        _resultados = resultados.cast<Wound>();
+        _resultados = List<Wound>.from(resultados);
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Erro na busca: $e')));
@@ -116,258 +122,241 @@ class _SearchWoundScreenState extends State<SearchWoundScreen> {
         backgroundColor: Colors.white,
         elevation: 1,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              'Escolha o critério de busca:',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 8),
-            Container(
-              width: 250,
-              child: DropdownButtonFormField<String>(
-                value: _campoSelecionado,
-                isDense: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                style: TextStyle(fontSize: 14, color: Colors.blue),
-                items:
-                    [
-                      'idade',
-                      'sexo',
-                      'cor_pele',
-                      'localizacao',
-                      'formato',
-                      'origem_ferida',
-                      'tempo_evolucao',
-                      'tipo_tecido',
-                      'causas',
-                      'extensao_lesao',
-                      'ferida_curada',
-                    ].map((String campo) {
-                      return DropdownMenuItem<String>(
-                        value: campo,
-                        child: Text(campo.replaceAll('_', ' ').toUpperCase()),
-                      );
-                    }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _campoSelecionado = value;
-                    _valorCampo = null;
-                  });
-                },
-              ),
-            ),
-
-            SizedBox(height: 8),
-            if (_campoSelecionado != null) ...[
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
               Text(
-                'Informe o valor para "${_campoSelecionado!}":',
+                'Escolha o critério de busca:',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
               SizedBox(height: 8),
-              Container(
-                width: 250,
-                child:
-                    _opcoesDropdown.containsKey(_campoSelecionado!)
-                        ? DropdownButtonFormField<String>(
-                          value: _valorCampo,
-                          isDense: true,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          style: TextStyle(fontSize: 14, color: Colors.blue),
-                          items:
-                              _opcoesDropdown[_campoSelecionado!]!.map((
-                                String value,
-                              ) {
-                                return DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                );
-                              }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _valorCampo = value;
-                            });
-                          },
-                          validator:
-                              (value) =>
-                                  value == null
-                                      ? 'Escolha um valor para o filtro'
-                                      : null,
-                        )
-                        : TextFormField(
-                          onChanged:
-                              (value) => setState(() => _valorCampo = value),
-                          decoration: InputDecoration(
-                            labelText:
-                                _campoSelecionado!
-                                    .replaceAll('_', ' ')
-                                    .toUpperCase(),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
+
+              // Lista de checkboxes para selecionar filtros
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children:
+                    _filtrosDisponiveis.map((campo) {
+                      return CheckboxListTile(
+                        title: Text(campo.replaceAll('_', ' ').toUpperCase()),
+                        value: _filtrosSelecionados.contains(campo),
+                        onChanged: (bool? selecionado) {
+                          setState(() {
+                            if (selecionado == true) {
+                              _filtrosSelecionados.add(campo);
+                              _valoresFiltros[campo] = '';
+                            } else {
+                              _filtrosSelecionados.remove(campo);
+                              _valoresFiltros.remove(campo);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
               ),
-            ],
 
-            SizedBox(height: 20),
-            Center(
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : searchWound,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  textStyle: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child:
-                    _isLoading
-                        ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 10),
-                            Text('Buscando...'),
-                          ],
-                        )
-                        : Text('Buscar'),
-              ),
-            ),
+              SizedBox(height: 16),
 
-            SizedBox(height: 20),
-            Expanded(child: _buildResultsList()),
-          ],
-        ),
-      ),
-    );
-  }
+              // Campos dinâmicos baseados nos filtros selecionados
+              ..._filtrosSelecionados.map((filtro) {
+                final opcoes = _opcoesDropdown[filtro];
+                final valorAtual = _valoresFiltros[filtro];
 
-  Widget _buildResultsList() {
-    if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
-    }
-
-    if (_resultados.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              'Nenhum resultado encontrado',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Tente outros critérios de busca',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'Resultados encontrados: ${_resultados.length}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue[700],
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: _resultados.length,
-            itemBuilder: (context, index) {
-              final wound = _resultados[index];
-
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  title: Text(
-                    'ID: ${wound.id ?? 'N/A'}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue[700],
-                    ),
-                  ),
-                  subtitle: Column(
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildInfoRow('Idade', wound.idade?.toString() ?? 'N/A'),
-                      _buildInfoRow('Sexo', wound.sexo ?? 'N/A'),
-                      _buildInfoRow('Cor da Pele', wound.corPele ?? 'N/A'),
-                      _buildInfoRow(
-                        'Localização',
-                        wound.localizacaoAnatomica ?? 'N/A',
+                      Text(
+                        filtro.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      _buildInfoRow('Formato', wound.forma ?? 'N/A'),
-                      _buildInfoRow('Origem', wound.origem ?? 'N/A'),
-                      _buildInfoRow('Causa', wound.causa ?? 'N/A'),
-                      _buildInfoRow(
-                        'Comprimento',
-                        '${wound.comprimento ?? 'N/A'} cm',
-                      ),
-                      _buildInfoRow('Largura', '${wound.largura ?? 'N/A'} cm'),
-                      _buildInfoRow(
-                        'Extensão da Lesão',
-                        '${wound.extensaoLesao ?? 'N/A'} cm²',
-                      ),
-                      _buildInfoRow('Evolução', wound.evolucao ?? 'N/A'),
-                      _buildInfoRow(
-                        'Data de Registro',
-                        wound.dataRegistro ?? 'N/A',
-                      ),
-                      _buildInfoRow(
-                        'Tipos de Tecido',
-                        (wound.tiposTecidoDescricao != null &&
-                                wound.tiposTecidoDescricao!.isNotEmpty)
-                            ? wound.tiposTecidoDescricao!.join(', ')
-                            : 'N/A',
-                      ),
+                      SizedBox(height: 4),
+                      opcoes != null
+                          ? DropdownButtonFormField<String>(
+                            value:
+                                opcoes.contains(valorAtual) ? valorAtual : null,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            items:
+                                opcoes
+                                    .map(
+                                      (valor) => DropdownMenuItem(
+                                        value: valor,
+                                        child: Text(valor),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _valoresFiltros[filtro] = value ?? '';
+                              });
+                            },
+                          )
+                          : TextFormField(
+                            initialValue: valorAtual,
+                            onChanged: (value) {
+                              setState(() {
+                                _valoresFiltros[filtro] = value;
+                              });
+                            },
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(),
+                              hintText: 'Digite o valor',
+                            ),
+                          ),
                     ],
                   ),
-                  isThreeLine: true,
+                );
+              }).toList(),
+
+              SizedBox(height: 20),
+              Center(
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : searchWound,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    textStyle: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child:
+                      _isLoading
+                          ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              Text('Buscando...'),
+                            ],
+                          )
+                          : Text('Buscar'),
                 ),
-              );
-            },
+              ),
+
+              SizedBox(height: 20),
+
+              // Resultados
+              _resultados.isNotEmpty
+                  ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Resultados encontrados: ${_resultados.length}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      ListView.builder(
+                        physics: NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: _resultados.length,
+                        itemBuilder: (context, index) {
+                          final wound = _resultados[index];
+                          return Card(
+                            margin: EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              title: Text(
+                                'ID: ${wound.id ?? 'N/A'}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[700],
+                                ),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildInfoRow(
+                                    'Idade',
+                                    wound.idade?.toString() ?? 'N/A',
+                                  ),
+                                  _buildInfoRow('Sexo', wound.sexo ?? 'N/A'),
+                                  _buildInfoRow(
+                                    'Cor da Pele',
+                                    wound.corPele ?? 'N/A',
+                                  ),
+                                  _buildInfoRow(
+                                    'Localização',
+                                    wound.localizacaoAnatomica ?? 'N/A',
+                                  ),
+                                  _buildInfoRow(
+                                    'Formato',
+                                    wound.forma ?? 'N/A',
+                                  ),
+                                  _buildInfoRow(
+                                    'Origem',
+                                    wound.origem ?? 'N/A',
+                                  ),
+                                  _buildInfoRow('Causa', wound.causa ?? 'N/A'),
+                                  _buildInfoRow(
+                                    'Comprimento',
+                                    '${wound.comprimento ?? 'N/A'} cm',
+                                  ),
+                                  _buildInfoRow(
+                                    'Largura',
+                                    '${wound.largura ?? 'N/A'} cm',
+                                  ),
+                                  _buildInfoRow(
+                                    'Extensão da Lesão',
+                                    '${wound.extensaoLesao ?? 'N/A'} cm²',
+                                  ),
+                                  _buildInfoRow(
+                                    'Evolução',
+                                    wound.evolucao ?? 'N/A',
+                                  ),
+                                  _buildInfoRow(
+                                    'Data de Registro',
+                                    wound.dataRegistro ?? 'N/A',
+                                  ),
+                                  _buildInfoRow(
+                                    'Tipos de Tecido',
+                                    (wound.tiposTecidoDescricao != null &&
+                                            wound
+                                                .tiposTecidoDescricao!
+                                                .isNotEmpty)
+                                        ? wound.tiposTecidoDescricao!.join(', ')
+                                        : 'N/A',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  )
+                  : _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : SizedBox.shrink(),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
