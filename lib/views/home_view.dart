@@ -117,11 +117,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 8),
-                    Text(
-                      'Gerencie os dados de feridas de forma eficiente',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
                   ],
                 ),
               ),
@@ -166,34 +161,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         SizedBox(width: 16),
                         Expanded(
                           child: _buildCustomButton(
-                            'Editar Ferida',
-                            Icons.edit,
-                            EditWoundScreen(),
+                            'Cadastro de Usuario',
+                            Icons.person_add,
+                            DeleteScreen(),
                           ),
                         ),
                       ],
                     ),
                     SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Expanded(
-                          child: _buildCustomButton(
-                            'Excluir Ferida',
-                            Icons.delete,
-                            DeleteScreen(),
-                          ),
-                        ),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: _buildCustomButton(
-                            'Ver Imagens',
-                            Icons.image,
-                            DriveImagesPage(),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),

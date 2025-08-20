@@ -1,14 +1,9 @@
-import 'dart:convert';
-
-import 'package:cadastro_dados/config/config.dart';
 import 'package:cadastro_dados/constats/wound_constants.dart';
 import 'package:cadastro_dados/controllers/wound/create_wound_controller.dart';
 import 'package:cadastro_dados/models/wound.dart';
-import 'package:cadastro_dados/services/auth_service.dart';
 import 'package:cadastro_dados/services/paciente/get_paciente_by_id_service.dart';
 import 'package:cadastro_dados/services/wound/create_wound_service.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class AddWoundScreen extends StatefulWidget {

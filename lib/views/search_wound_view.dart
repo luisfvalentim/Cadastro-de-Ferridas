@@ -31,6 +31,18 @@ class _SearchWoundScreenState extends State<SearchWoundScreen> {
     'extensao_lesao': WoundConstants.faixaExtensoesLesao,
   };
 
+  final List<String> _filtrosDisponiveis = [
+    'idade',
+    'sexo',
+    'cor_pele',
+    'localizacao_anatomica_id',
+    'forma',
+    'origem',
+    'causa',
+    'tipo_tecido',
+    'extensao_lesao',
+  ];
+
   Future<void> searchWound() async {
     if (_campoSelecionado == null ||
         _valorCampo == null ||
