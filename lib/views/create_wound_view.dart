@@ -5,6 +5,11 @@ import 'package:cadastro_dados/services/paciente/get_paciente_by_id_service.dart
 import 'package:cadastro_dados/services/wound/create_wound_service.dart';
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:cadastro_dados/services/image/list_imagem_service.dart';
+import 'package:cadastro_dados/custom/custom_text_field.dart';
+import 'package:cadastro_dados/custom/custom_dropdown_field.dart';
+import 'package:cadastro_dados/custom/custom_checkbox_grid.dart';
+import 'package:cadastro_dados/custom/custom_multi_select_field.dart';
 
 class AddWoundScreen extends StatefulWidget {
   @override
@@ -14,6 +19,7 @@ class AddWoundScreen extends StatefulWidget {
 class _AddWoundScreenState extends State<AddWoundScreen> {
   final _formKey = GlobalKey<FormState>();
   final _createWoundController = CreateWoundController(CreateWoundService());
+  final _listImagemService = ListImagemService();
 
   final _pacienteIdController = TextEditingController();
   final TextEditingController _evolucaoController = TextEditingController();
@@ -21,6 +27,9 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
   final TextEditingController _extensaoController = TextEditingController();
   final TextEditingController _larguraController = TextEditingController();
   final TextEditingController _comprimentoController = TextEditingController();
+  final TextEditingController _dataNascimentoController =
+      TextEditingController();
+
   final _dataRegistroFormatter = MaskTextInputFormatter(mask: '##/##/####');
   final _dataNascimentoFormatter = MaskTextInputFormatter(mask: '##/##/####');
   final _evolucaoFormatter = MaskTextInputFormatter(
@@ -38,13 +47,54 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
   String? _causa;
   int? _idade;
   bool _isPacienteExistente = false;
+  int? _selectedImagemId;
+  List<Map<String, dynamic>> _imagensDisponiveis = [];
+  bool _carregandoImagens = false;
 
   bool _isLoading = false;
+
+  String? _formatDateToApi(String? brDate) {
+    if (brDate == null || brDate.isEmpty) return null;
+    final parts = brDate.split('/');
+    if (parts.length != 3) return brDate;
+    final dia = parts[0].padLeft(2, '0');
+    final mes = parts[1].padLeft(2, '0');
+    final ano = parts[2];
+    return '$ano-$mes-$dia';
+  }
 
   @override
   void dispose() {
     _pacienteIdController.dispose();
+    _dataNascimentoController.dispose();
+    _evolucaoController.dispose();
+    _dataRegistroController.dispose();
+    _extensaoController.dispose();
+    _larguraController.dispose();
+    _comprimentoController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarImagens();
+  }
+
+  Future<void> _carregarImagens() async {
+    setState(() => _carregandoImagens = true);
+    try {
+      final imgs = await _listImagemService.getAll();
+      setState(() {
+        _imagensDisponiveis = imgs;
+        _carregandoImagens = false;
+      });
+    } catch (e) {
+      setState(() => _carregandoImagens = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao carregar imagens: $e')));
+    }
   }
 
   Future<void> _salvarFerida() async {
@@ -84,19 +134,22 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
           corPele: _corPele,
           idade:
               _dataNascimento != null ? _calcularIdade(_dataNascimento!) : null,
+          dataNascimento: _formatDateToApi(_dataNascimento),
 
           localizacaoAnatomica: _localizacaoSelecionada, // mostrado no Dropdown
           localizacaoAnatomicaId:
               WoundConstants
                   .localizacoesMap[_localizacaoSelecionada], // enviado no toJson()
+          localizacoes: idLocalizacao != null ? [idLocalizacao] : [],
           causa: _causa,
           origem: _origemFerida,
+          imagemId: _selectedImagemId,
           comprimento: double.tryParse(_comprimentoController.text) ?? 0.0,
           largura: double.tryParse(_larguraController.text) ?? 0.0,
           extensaoLesao: double.tryParse(_extensaoController.text),
           evolucao: _evolucaoController.text,
           forma: _formato?.toLowerCase(),
-          dataRegistro: _dataRegistroController.text,
+          dataRegistro: _formatDateToApi(_dataRegistroController.text),
           tiposTecido:
               _tiposTecidoSelecionados
                   .map((t) => WoundConstants.tiposTecidoMap[t]!)
@@ -235,19 +288,49 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              Text(
-                'Id do Paciente',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
-                controller: _pacienteIdController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'ID do Paciente',
-                  border: OutlineInputBorder(),
+              const SizedBox(height: 8),
+              if (_carregandoImagens)
+                const Center(child: CircularProgressIndicator())
+              else
+                CustomDropdownField<int>(
+                  label: 'Escolha uma imagem',
+                  hint: 'Selecione',
+                  value: _selectedImagemId,
+                  items:
+                      _imagensDisponiveis.map((img) {
+                        return DropdownMenuItem<int>(
+                          value: img['id'] as int,
+                          child: Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  img['url'] ?? '',
+                                  height: 56,
+                                  width: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (context, error, stack) =>
+                                          const Icon(Icons.broken_image),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text('ID ${img['id']}'),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                  onChanged: (v) => setState(() => _selectedImagemId = v),
+                  validator: (v) => v == null ? 'Escolha uma imagem' : null,
                 ),
+              const SizedBox(height: 16),
+
+              CustomTextField(
+                controller: _pacienteIdController,
+                label: 'ID do Paciente',
+                hint: 'Digite o ID',
+                keyboardType: TextInputType.number,
                 onChanged: (value) {
-                  // Verifica se tem pelo menos 1 dígito para evitar chamadas desnecessárias
                   if (value.length >= 1) {
                     _buscarPacientePorId(value);
                   }
@@ -259,26 +342,14 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
                             : null,
               ),
               SizedBox(height: 16),
-              // DATA DE NASCIMENTO
-              Text(
-                'Data de Nascimento',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
-                inputFormatters: [
-                  _dataNascimentoFormatter,
-                ], // máscara dd/mm/aaaa
+              CustomTextField(
+                controller: _dataNascimentoController,
+                label: 'Data de Nascimento',
+                hint: 'dd/mm/aaaa',
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Data de Nascimento (dd/mm/aaaa)',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _dataNascimento = value;
-                  });
-                },
-                enabled: !_isPacienteExistente, // bloqueia se já existe
+                inputFormatters: [_dataNascimentoFormatter],
+                readOnly: _isPacienteExistente,
+                onChanged: (value) => setState(() => _dataNascimento = value),
                 validator: (value) {
                   if (value == null || value.isEmpty || value.length != 10) {
                     return 'Informe a data de nascimento completa';
@@ -289,261 +360,216 @@ class _AddWoundScreenState extends State<AddWoundScreen> {
                   return null;
                 },
               ),
-
               SizedBox(height: 16),
-
-              // SEXO
-              Text('Sexo', style: TextStyle(fontWeight: FontWeight.bold)),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Sexo',
+                hint: 'Escolha o sexo',
                 value: _sexo,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.sexos.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
+                    WoundConstants.sexos
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v),
+                          ),
+                        )
+                        .toList(),
                 onChanged:
                     _isPacienteExistente
                         ? null
-                        : (value) => setState(() => _sexo = value),
-                validator: (value) => value == null ? 'Escolha o sexo' : null,
+                        : (v) => setState(() => _sexo = v),
+                validator: (v) => v == null ? 'Escolha o sexo' : null,
+                isEnabled: !_isPacienteExistente,
               ),
-
               SizedBox(height: 16),
-
-              // COR DA PELE
-              Text(
-                'Cor da Pele',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Cor da Pele',
+                hint: 'Escolha a cor da pele',
                 value: _corPele,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.coresPele.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
+                    WoundConstants.coresPele
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v),
+                          ),
+                        )
+                        .toList(),
                 onChanged:
                     _isPacienteExistente
                         ? null
-                        : (value) => setState(() => _corPele = value),
-                validator:
-                    (value) => value == null ? 'Escolha a cor da pele' : null,
+                        : (v) => setState(() => _corPele = v),
+                validator: (v) => v == null ? 'Escolha a cor da pele' : null,
+                isEnabled: !_isPacienteExistente,
               ),
-
               SizedBox(height: 16),
-              Text(
-                'Localização anatômica',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Localização anatômica',
+                hint: 'Escolha a localização',
                 value: _localizacaoSelecionada,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.localizacoesMap.keys.map((String key) {
-                      return DropdownMenuItem<String>(
-                        value: key,
-                        child: Text(key),
-                      );
-                    }).toList(),
-                onChanged:
-                    (value) => setState(() => _localizacaoSelecionada = value),
-                validator:
-                    (value) => value == null ? 'Escolha a localização' : null,
+                    WoundConstants.localizacoesMap.keys
+                        .map(
+                          (key) => DropdownMenuItem<String>(
+                            value: key,
+                            child: Text(key),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (v) => setState(() => _localizacaoSelecionada = v),
+                validator: (v) => v == null ? 'Escolha a localização' : null,
               ),
-
               SizedBox(height: 16),
-
-              Text('Formato', style: TextStyle(fontWeight: FontWeight.bold)),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Formato',
+                hint: 'Escolha o formato da ferida',
                 value: _formato,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.formas.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                onChanged: (value) => setState(() => _formato = value),
+                    WoundConstants.formas
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (v) => setState(() => _formato = v),
                 validator:
-                    (value) =>
-                        value == null ? 'Escolha o formato da ferida' : null,
+                    (v) => v == null ? 'Escolha o formato da ferida' : null,
               ),
               SizedBox(height: 16),
-
-              Text(
-                'Origem da Ferida',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Origem da Ferida',
+                hint: 'Selecione a origem',
                 value: _origemFerida,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.origens.map((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                onChanged: (value) => setState(() => _origemFerida = value),
+                    WoundConstants.origens
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (v) => setState(() => _origemFerida = v),
                 validator:
-                    (value) =>
-                        value == null ? 'Escolha a origem da ferida' : null,
+                    (v) => v == null ? 'Escolha a origem da ferida' : null,
               ),
-
               SizedBox(height: 16),
 
-              Text(
-                'Tempo de Evolução',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
+              CustomTextField(
                 controller: _evolucaoController,
-                inputFormatters: [_evolucaoFormatter],
+                label: 'Tempo de Evolução',
+                hint: 'MM/AAAA',
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Evolução (MM/AAAA)',
-                  border: OutlineInputBorder(),
-                ),
+                inputFormatters: [_evolucaoFormatter],
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
+                  if (value == null || value.isEmpty)
                     return 'Informe a evolução';
-                  }
-                  if (!validarDataFlexivel(value)) {
+                  if (!validarDataFlexivel(value))
                     return 'Formato inválido ou data futura';
-                  }
                   return null;
                 },
               ),
-
               SizedBox(height: 16),
+
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Tipos de Tecido',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  CustomCheckboxGrid(
+                    title: 'Tipos de Tecido',
+                    options: WoundConstants.tiposTecido,
+                    labels: WoundConstants.tiposTecidoLabels,
+                    selectedOptions: _tiposTecidoSelecionados,
+                    onToggle: (tecido) {
+                      setState(() {
+                        if (_tiposTecidoSelecionados.contains(tecido)) {
+                          _tiposTecidoSelecionados.remove(tecido);
+                        } else {
+                          _tiposTecidoSelecionados.add(tecido);
+                        }
+                      });
+                    },
                   ),
-                  ...WoundConstants.tiposTecido.map((tecido) {
-                    return CheckboxListTile(
-                      title: Text(tecido),
-                      value: _tiposTecidoSelecionados.contains(tecido),
-                      onChanged: (selected) {
-                        setState(() {
-                          if (selected == true) {
-                            _tiposTecidoSelecionados.add(tecido);
-                          } else {
-                            _tiposTecidoSelecionados.remove(tecido);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
                 ],
               ),
 
               SizedBox(height: 16),
 
-              Text('Causas', style: TextStyle(fontWeight: FontWeight.bold)),
-              DropdownButtonFormField<String>(
+              CustomDropdownField<String>(
+                label: 'Causa da Ferida',
+                hint: 'Selecione a causa',
                 value: _causa,
-                decoration: InputDecoration(border: OutlineInputBorder()),
                 items:
-                    WoundConstants.causas.map((value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-                onChanged: (value) => setState(() => _causa = value),
+                    WoundConstants.causas
+                        .map(
+                          (v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v),
+                          ),
+                        )
+                        .toList(),
+                onChanged: (v) => setState(() => _causa = v),
                 validator:
-                    (value) =>
-                        value == null ? 'Escolha a causa da ferida' : null,
+                    (v) => v == null ? 'Escolha a causa da ferida' : null,
               ),
 
               SizedBox(height: 16),
 
-              Text(
-                'Comprimento (cm)',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
+              CustomTextField(
                 controller: _comprimentoController,
+                label: 'Comprimento (cm)',
+                hint: 'Ex: 2.5',
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Comprimento (cm)',
-                ),
                 onChanged: (_) => _calcularExtensao(),
                 validator: (value) {
                   if (value == null || value.isEmpty)
                     return 'Informe o comprimento';
-                  if (double.tryParse(value.replaceAll(',', '.')) == null)
+                  if (double.tryParse(value.replaceAll(',', '.')) == null) {
                     return 'Valor inválido';
+                  }
                   return null;
                 },
               ),
 
               SizedBox(height: 16),
 
-              Text(
-                'Largura (cm)',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
+              CustomTextField(
                 controller: _larguraController,
+                label: 'Largura (cm)',
+                hint: 'Ex: 1.8',
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Largura (cm)',
-                ),
                 onChanged: (_) => _calcularExtensao(),
                 validator: (value) {
                   if (value == null || value.isEmpty)
                     return 'Informe a largura';
-                  if (double.tryParse(value.replaceAll(',', '.')) == null)
+                  if (double.tryParse(value.replaceAll(',', '.')) == null) {
                     return 'Valor inválido';
+                  }
                   return null;
                 },
               ),
 
               SizedBox(height: 16),
-              Text(
-                'Extensão da Lesão',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
+
+              CustomTextField(
                 controller: _extensaoController,
+                label: 'Extensão da Lesão (cm²)',
                 readOnly: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Extensão da Lesão (cm²)',
-                ),
               ),
               SizedBox(height: 16),
-              Text(
-                'Data de Registro',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              TextFormField(
+
+              CustomTextField(
                 controller: _dataRegistroController,
+                label: 'Data de Registro',
+                hint: 'dd/mm/aaaa',
                 inputFormatters: [_dataRegistroFormatter],
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Data de Registro (dd/mm/aaaa)',
-                  border: OutlineInputBorder(),
-                ),
                 validator: (value) {
                   if (value == null || value.isEmpty || value.length < 10) {
                     return 'Informe a data completa';
                   }
-                  if (!validarDataFlexivel(value ?? '')) {
+                  if (!validarDataFlexivel(value)) {
                     return 'Data inválida ou no futuro';
                   }
                   return null;

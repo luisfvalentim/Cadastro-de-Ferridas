@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../home_view.dart';
+import '../home_view_usuario.dart';
+import '../home_view_admin.dart';
 import 'login_view.dart';
 
 class RegisterView extends StatefulWidget {
@@ -56,7 +58,11 @@ class _RegisterViewState extends State<RegisterView> {
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
+          MaterialPageRoute(
+            builder: (context) => user.isAdmin
+                ? HomeAdminScreen()
+                : const HomeScreenUsuario(),
+          ),
         );
       } else {
         setState(() {

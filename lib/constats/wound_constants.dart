@@ -47,6 +47,12 @@ class WoundConstants {
     'linear',
   ];
 
+  static const Map<String, String> formasLabels = {
+    'arredondada/oval': 'Arredondada/Oval',
+    'irregular': 'Irregular',
+    'linear': 'Linear',
+  };
+
   static const List<String> tiposTecido = [
     'granulação',
     'necrose',
@@ -54,6 +60,14 @@ class WoundConstants {
     'fibrina',
     'epitelização',
   ];
+
+  static const Map<String, String> tiposTecidoLabels = {
+    'granulação': 'Granulação',
+    'necrose': 'Necrose',
+    'esfacelo': 'Esfacelo',
+    'fibrina': 'Fibrina',
+    'epitelização': 'Epitelização',
+  };
 
   // Só este é necessário como Map
   static const Map<String, int> tiposTecidoMap = {
@@ -66,6 +80,12 @@ class WoundConstants {
 
   static const List<String> causas = ['Intencional', 'Não intencional'];
 
+  static const Map<String, String> causasLabels = {
+    'Intencional': 'Intencional',
+    'Não intencional': 'Não intencional',
+    'outro': 'Outro',
+  };
+
   static const List<String> origens = [
     'neoplasia',
     'úlcera venosa',
@@ -73,6 +93,15 @@ class WoundConstants {
     'lesão por pressão',
     'parasitária',
   ];
+
+  static const Map<String, String> origensLabels = {
+    'neoplasia': 'Neoplasia',
+    'úlcera venosa': 'Úlcera venosa',
+    'úlcera arterial': 'Úlcera arterial',
+    'lesão por pressão': 'Lesão por pressão',
+    'parasitária': 'Parasitária',
+    'outro': 'Outro',
+  };
 
   static const List<String> faixaExtensoesLesao = [
     'Pequena: Até 3 cm²',
@@ -82,4 +111,31 @@ class WoundConstants {
   ];
 
   static const List<String> faixasIdade = ['< 20', '20-59', '60+'];
+
+  /// Filtros disponíveis para busca de feridas (labels na mesma ordem).
+  static const List<String> filtrosDisponiveis = [
+    'idade',
+    'sexo',
+    'cor_pele',
+    'localizacao_anatomica_id',
+    'forma',
+    'origem',
+    'causa',
+    'tipo_tecido',
+    'extensao_lesao',
+    'paciente_id',
+  ];
+
+  static const List<String> filtrosDisponiveisLabels = [
+    'Idade',
+    'Sexo',
+    'Cor da Pele',
+    'Localização Anatômica',
+    'Forma',
+    'Origem',
+    'Causa',
+    'Tipo de Tecido',
+    'Extensão da Lesão',
+    'ID do Paciente',
+  ];
 }

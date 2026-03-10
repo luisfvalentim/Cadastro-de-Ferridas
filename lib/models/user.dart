@@ -39,4 +39,31 @@ class AppUser {
   }
 
   bool get isAdmin => role == 'admin';
+
+  factory AppUser.fromApiUser(Map<String, dynamic> json) {
+    return AppUser(
+      id: json['id'],
+      username: json['username'] ?? json['email'] ?? '',
+      name: json['name'] ?? '',
+      role: json['role'] ?? 'usuario',
+      token: json['token'],
+      isUserActive: json['is_active'] is bool
+          ? json['is_active']
+          : (json['is_active'] == 1),
+      createdAt:
+          json['created_at'] != null
+              ? DateTime.parse(json['created_at'])
+              : null,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : null,
+    );
+  }
+
+  static List<AppUser> listFromJson(List<dynamic> data) {
+    return data
+        .map((e) => AppUser.fromApiUser(e as Map<String, dynamic>))
+        .toList();
+  }
 }

@@ -5,6 +5,8 @@ import '../../services/auth/interface/i_login_auth_service.dart';
 import '../../services/auth/login_auth_service.dart';
 import '../../models/user.dart';
 import '../home_view.dart';
+import '../home_view_usuario.dart';
+import '../home_view_admin.dart';
 import 'register_view.dart';
 
 class LoginView extends StatefulWidget {
@@ -61,9 +63,12 @@ class _LoginViewState extends State<LoginView> {
           ),
         );
 
+        final destination =
+            user.isAdmin ? HomeAdminScreen() : const HomeScreenUsuario();
+
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => HomeScreen()),
+          MaterialPageRoute(builder: (context) => destination),
           (route) => false,
         );
       } else {

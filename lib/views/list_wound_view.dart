@@ -1,318 +1,394 @@
-import 'package:cadastro_dados/controllers/wound/delete_wound_controller.dart';
-import 'package:cadastro_dados/controllers/wound/list_wounds_controller.dart';
-import 'package:cadastro_dados/services/wound/delete_wound_service.dart';
-import 'package:cadastro_dados/views/update_wound_view.dart';
 import 'package:flutter/material.dart';
-import '../models/wound.dart';
+import 'package:cadastro_dados/controllers/wound/list_wounds_controller.dart';
+import 'package:cadastro_dados/controllers/wound/delete_wound_controller.dart';
 import 'package:cadastro_dados/services/wound/list_wound_service.dart';
+import 'package:cadastro_dados/services/wound/delete_wound_service.dart';
+import 'package:cadastro_dados/custom/custom_search_field.dart';
+import 'package:cadastro_dados/widgets/wound_info_list.dart';
+import '../models/wound.dart';
+import 'update_wound_view.dart';
 
 class WoundsListScreen extends StatefulWidget {
+  const WoundsListScreen({super.key});
+
   @override
-  _WoundsListScreen createState() => _WoundsListScreen();
+  State<WoundsListScreen> createState() => _WoundsListScreenState();
 }
 
-class _WoundsListScreen extends State<WoundsListScreen> {
+class _WoundsListScreenState extends State<WoundsListScreen> {
   final _woundController = ListWoundController(ListWoundsService());
-  final _deleteWoundController = DeleteWoundController(DeleteWoundService());
+  final _deleteController = DeleteWoundController(DeleteWoundService());
 
   List<Wound> _wounds = [];
-  bool _isLoading = true;
+  List<Wound> _filtered = [];
+  bool _loading = true;
   String? _error;
-  String _searchQuery = '';
-  List<Wound> _filteredWounds = [];
+  String _query = '';
+  final Set<int> _selectedForCompare = {};
 
   @override
   void initState() {
     super.initState();
-    _loadWounds();
+    _load();
   }
 
-  Future<void> _loadWounds() async {
+  Future<void> _load() async {
     setState(() {
-      _isLoading = true;
+      _loading = true;
       _error = null;
     });
-
     try {
-      final wounds = await _woundController.listAll();
+      final data = await _woundController.listAll();
       setState(() {
-        _wounds = wounds;
-        _filteredWounds = _applySearchFilter(wounds, _searchQuery);
-        _isLoading = false;
+        _wounds = data;
+        _filtered = _applyFilter(data, _query);
       });
     } catch (e) {
-      setState(() {
-        _error = 'Erro ao carregar os dados: $e';
-        _isLoading = false;
-      });
+      setState(() => _error = 'Erro ao carregar os dados: $e');
+    } finally {
+      setState(() => _loading = false);
     }
   }
 
-  List<Wound> _applySearchFilter(List<Wound> wounds, String query) {
-    if (query.isEmpty) return wounds;
-
-    final idQuery = int.tryParse(query);
-    if (idQuery == null) return []; // Só permite buscas numéricas
-
-    return wounds.where((w) => w.id == idQuery).toList();
+  List<Wound> _applyFilter(List<Wound> list, String q) {
+    if (q.isEmpty) return list;
+    final id = int.tryParse(q);
+    if (id == null) return [];
+    return list.where((w) => w.pacienteId == id).toList();
   }
 
-  Future<void> _deleteWound(Wound wound) async {
-    if (wound.id == null) return;
-
-    try {
-      final success = await _deleteWoundController.delete(wound.id!);
-      if (success) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ferida excluída com sucesso!')));
-        _loadWounds();
+  void _toggleCompare(int? id) {
+    if (id == null) return;
+    setState(() {
+      if (_selectedForCompare.contains(id)) {
+        _selectedForCompare.remove(id);
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erro ao excluir ferida')));
+        if (_selectedForCompare.length >= 2) {
+          _selectedForCompare.clear();
+        }
+        _selectedForCompare.add(id);
       }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
-    }
+    });
   }
 
-  void _handleMenuAction(String action, Wound wound) {
+  void _openFull(String? url) {
+    if (url == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _ImageFullScreen(url: url)),
+    );
+  }
+
+  void _openCompare() {
+    final sel = _filtered
+        .where((w) => w.id != null && _selectedForCompare.contains(w.id))
+        .take(2)
+        .toList();
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => _CompareWoundsScreen(wounds: sel)),
+    );
+  }
+
+  void _handleMenu(String action, Wound w) {
     switch (action) {
       case 'edit':
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => EditWoundScreen(wound: wound),
-          ),
-        ).then((_) => _loadWounds()); // recarrega ao voltar
+          MaterialPageRoute(builder: (_) => EditWoundScreen(wound: w)),
+        ).then((_) => _load());
         break;
-
       case 'delete':
-        _showDeleteConfirmation(wound);
+        _confirmDelete(w);
         break;
     }
   }
 
-  void _showDeleteConfirmation(Wound wound) {
-    showDialog(
+  Future<void> _confirmDelete(Wound w) async {
+    final ok = await showDialog<bool>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: Text('Confirmar Exclusão'),
-            content: Text('Deseja realmente excluir a ferida ID ${wound.id}?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Cancelar'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _deleteWound(wound);
-                },
-                child: Text('Excluir', style: TextStyle(color: Colors.red)),
-              ),
-            ],
-          ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar exclusão'),
+        content: Text('Excluir ferida ID ${w.id}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Excluir', style: TextStyle(color: Colors.red))),
+        ],
+      ),
     );
+    if (ok == true && w.id != null) {
+      try {
+        final success = await _deleteController.delete(w.id!);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ferida excluída')));
+          _load();
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao excluir: $e')));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(
-          'Listagem de Feridas',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Listagem de Feridas'),
         backgroundColor: Colors.blue,
-        iconTheme: IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(icon: Icon(Icons.refresh), onPressed: _loadWounds),
-        ],
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _load)],
       ),
-      body: _buildBody(),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _errorWidget()
+              : _listWidget(),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
+  Widget _errorWidget() => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              "Erro ao carregar os dados",
-              style: TextStyle(fontSize: 18, color: Colors.red),
-            ),
-            SizedBox(height: 10),
-            Text(_error!, style: TextStyle(color: Colors.grey)),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loadWounds,
-              child: Text('Tentar Novamente'),
-            ),
+            const Text('Erro ao carregar os dados', style: TextStyle(color: Colors.red)),
+            const SizedBox(height: 8),
+            Text(_error ?? ''),
+            ElevatedButton(onPressed: _load, child: const Text('Tentar novamente')),
           ],
         ),
       );
-    }
 
+  Widget _listWidget() {
     if (_wounds.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              "Nenhuma ferida encontrada",
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-            SizedBox(height: 8),
-            Text(
-              "Adicione uma nova ferida para começar",
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      );
+      return const Center(child: Text('Nenhuma ferida encontrada'));
     }
 
     return RefreshIndicator(
-      onRefresh: _loadWounds,
-      child: Column(
+      onRefresh: _load,
+      child: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Buscar por Id da Ferida',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: CustomSearchField(
+                  hint: 'Buscar por ID do paciente',
+                  onChanged: (v) {
+                    setState(() {
+                      _query = v;
+                      _filtered = _applyFilter(_wounds, v);
+                    });
+                  },
                 ),
-                filled: true,
-                fillColor: Colors.grey[100],
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                  _filteredWounds = _applySearchFilter(_wounds, value);
-                });
-              },
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _filteredWounds.length,
-              itemBuilder: (context, index) {
-                final wound = _filteredWounds[index];
-
-                return Card(
-                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    title: Text("ID: ${wound.id ?? 'Sem ID'}"),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildInfoRow(
-                          'Idade',
-                          wound.idade?.toString() ?? 'N/A',
-                        ),
-                        _buildInfoRow('Sexo', wound.sexo ?? 'N/A'),
-                        _buildInfoRow('Cor da Pele', wound.corPele ?? 'N/A'),
-                        _buildInfoRow(
-                          'Localização',
-                          wound.localizacaoAnatomica ?? 'N/A',
-                        ),
-                        _buildInfoRow('Formato', wound.forma ?? 'N/A'),
-                        _buildInfoRow('Origem', wound.origem ?? 'N/A'),
-                        _buildInfoRow('Causa', wound.causa ?? 'N/A'),
-                        _buildInfoRow(
-                          'Comprimento',
-                          '${wound.comprimento ?? 'N/A'} cm',
-                        ),
-                        _buildInfoRow(
-                          'Largura',
-                          '${wound.largura ?? 'N/A'} cm',
-                        ),
-                        _buildInfoRow(
-                          'Extensão da Lesão',
-                          '${wound.extensaoLesao ?? 'N/A'} cm²',
-                        ),
-                        _buildInfoRow('Evolução', wound.evolucao ?? 'N/A'),
-                        _buildInfoRow(
-                          'Data de Registro',
-                          wound.dataRegistro ?? 'N/A',
-                        ),
-                        _buildInfoRow(
-                          'Tipos de Tecido',
-                          (wound.tiposTecidoDescricao != null &&
-                                  wound.tiposTecidoDescricao!.isNotEmpty)
-                              ? wound.tiposTecidoDescricao!.join(', ')
-                              : 'N/A',
-                        ),
-                      ],
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) => _handleMenuAction(value, wound),
-                      itemBuilder:
-                          (context) => [
-                            PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _filtered.length,
+                  itemBuilder: (context, index) {
+                    final w = _filtered[index];
+                    final selected = w.id != null && _selectedForCompare.contains(w.id);
+                    return Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.blue, width: 1.5),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.edit, color: Colors.blue),
-                                  SizedBox(width: 8),
-                                  Text('Editar'),
+                                  Text(
+                                    "ID: ${w.id ?? 'Sem ID'}",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[700],
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  WoundInfoList(wound: w),
                                 ],
                               ),
                             ),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              width: 170,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.delete, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Excluir'),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                        value: selected,
+                                        onChanged: (_) => _toggleCompare(w.id),
+                                      ),
+                                      PopupMenuButton<String>(
+                                        onSelected: (v) => _handleMenu(v, w),
+                                        itemBuilder: (context) => const [
+                                          PopupMenuItem(
+                                            value: 'edit',
+                                            child: ListTile(
+                                              leading: Icon(Icons.edit, color: Colors.blue),
+                                              title: Text('Editar'),
+                                            ),
+                                          ),
+                                          PopupMenuItem(
+                                            value: 'delete',
+                                            child: ListTile(
+                                              leading: Icon(Icons.delete, color: Colors.red),
+                                              title: Text('Excluir'),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (w.imagemUrl != null)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Stack(
+                                        children: [
+                                          Image.network(
+                                            w.imagemUrl!,
+                                            height: 170,
+                                            width: 170,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(
+                                              Icons.broken_image,
+                                              size: 80,
+                                              color: Colors.red,
+                                            ),
+                                          ),
+                                          Positioned(
+                                            right: 4,
+                                            top: 4,
+                                            child: IconButton(
+                                              icon: const Icon(Icons.fullscreen, color: Colors.white),
+                                              tooltip: 'Ver em tela cheia',
+                                              onPressed: () => _openFull(w.imagemUrl!),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  else
+                                    const Icon(
+                                      Icons.image_not_supported,
+                                      size: 80,
+                                      color: Colors.grey,
+                                    ),
                                 ],
                               ),
                             ),
                           ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
+          if (_selectedForCompare.length == 2)
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: FloatingActionButton.extended(
+                onPressed: _openCompare,
+                label: const Text('Comparar (2)'),
+                icon: const Icon(Icons.compare),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImageFullScreen extends StatelessWidget {
+  final String url;
+  const _ImageFullScreen({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.broken_image, color: Colors.red, size: 120),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompareWoundsScreen extends StatelessWidget {
+  final List<Wound> wounds;
+  const _CompareWoundsScreen({required this.wounds});
+
+  @override
+  Widget build(BuildContext context) {
+    final left = wounds.isNotEmpty ? wounds[0] : null;
+    final right = wounds.length > 1 ? wounds[1] : null;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Comparar Feridas')),
+      backgroundColor: Colors.black,
+      body: Row(
+        children: [
+          Expanded(child: _pane(left)),
+          Expanded(child: _pane(right)),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-            ),
+  Widget _pane(Wound? w) {
+    if (w == null) {
+      return const Center(
+        child: Icon(Icons.image_not_supported, color: Colors.white70, size: 80),
+      );
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: InteractiveViewer(
+            child: w.imagemUrl != null
+                ? Image.network(
+                    w.imagemUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, color: Colors.red, size: 120),
+                  )
+                : const Icon(Icons.image_not_supported, color: Colors.grey, size: 120),
           ),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 12))),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Text(
+            'ID: ${w.id ?? 'N/A'} | Paciente: ${w.pacienteId ?? 'N/A'}',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }
